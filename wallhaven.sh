@@ -110,28 +110,30 @@ function getPage {
 #
 function downloadWallpapers {
 	URLSFORIMAGES="$(cat tmp | grep -o '<a class="preview" href="http://alpha.wallhaven.cc/wallpaper/[0-9]*"' | sed  's .\{25\}  ')"
-        readarray -t sorted < <(for a in "${URLSFORIMAGES[@]}"; do echo "$a"; done | sort -r)
+	OLDIFS=$IFS
+	IFS=$' ' sorted=($(sort -r <<<"${URLSFORIMAGES[*]}"))
+	IFS=$OLDIFS
 	for imgURL in $sorted
         do
-        img="$(echo $imgURL | sed 's/.\{1\}$//')"
-	number="$(echo $img | sed  's .\{36\}  ')"
-#	echo "number: $number"
-        img="$(echo http://alpha.wallhaven.cc/wallpapers/full/wallhaven-$number.jpg)"
-#	echo "img: $img"
-	if cat downloaded.txt | grep -w "$number" >/dev/null
-			then
-				printf "File already downloaded!\n"
-				if [ $TYPE == refresh ]; then
-				  rm -f cookies.txt login login.1 tmp
-				  printf "    - done!\n"
-				  exit 0
-                                fi
-			else
-				echo $number >> downloaded.txt
-				wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=alpha.wallhaven.cc $img
-				#cat $number | egrep -o "http://alpha.wallhaven.cc/wallpapers.*(png|jpg|gif)" | wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=http://alpha.wallhaven.cc/wallpapers/$number -i -
-				#rm $number
-        fi
+          img="$(echo $imgURL | sed 's/.\{1\}$//')"
+	  number="$(echo $img | sed  's .\{36\}  ')"
+	  echo "number: $number"
+          img="$(echo http://alpha.wallhaven.cc/wallpapers/full/wallhaven-$number.jpg)"
+	  echo "img: $img"
+	  if cat downloaded.txt | grep -w "$number" >/dev/null
+	  then
+	    printf "File already downloaded!\n"
+	    if [ $TYPE == refresh ]; then
+	      rm -f cookies.txt login login.1 tmp
+	      printf "    - done!\n"
+	      exit 0
+            fi
+	  else
+	    echo $number >> downloaded.txt
+	    wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=alpha.wallhaven.cc $img
+	    #cat $number | egrep -o "http://alpha.wallhaven.cc/wallpapers.*(png|jpg|gif)" | wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=http://alpha.wallhaven.cc/wallpapers/$number -i -
+	    #rm $number
+         fi
         done
         rm tmp
 } #/downloadWallpapers
@@ -152,7 +154,7 @@ if [ $TYPE == standard ] || [ $TYPE == refresh ]; then
         printf "Download Page $page"
         getPage "search?page=$page&categories=$CATEGORIES&purity=$PURITY&resolutions=$RESOLUTION&ratios=$RATIO&sorting=$SORTING&order=$ORDER"
         printf "                    - done!\n"
-        printf "Download Wallpapers from Page $page"
+        printf "Download Wallpapers from Page $page\n"
         downloadWallpapers
         printf "    - done!\n"
     done
