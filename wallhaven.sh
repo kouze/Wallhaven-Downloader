@@ -32,21 +32,21 @@ PASS=""
 ###   Configuration Options   ###
 #################################
 # Where should the Wallpapers be stored?
-LOCATION=/location/to/your/wallpaper/folder
-# How many Wallpapers should be downloaded, should be multiples of 64 (right now they only use a fixed number of thumbs per page)
-WPNUMBER=64
-# Type standard (newest, oldest, random, hits, mostfav), search, favorites, useruploads
-TYPE=standard
+LOCATION=/home/nykouze/test
+# How many Wallpapers should be downloaded, should be multiples of 24 (right now they only use a fixed number of thumbs per page)
+WPNUMBER=60000
+# Type standard (newest, oldest, random, hits, mostfav), search, favorites, useruploads, refresh
+TYPE=refresh
 # From which Categories should Wallpapers be downloaded
 CATEGORIES=111
 # Which Purity Wallpapers should be downloaded
-PURITY=110
+PURITY=111
 # Which Resolution should be downloaded, leave empty for all
 RESOLUTION=
 # Which aspectratio should be downloaded, leave empty for all
 RATIO=
 # Which Type should be displayed (relevance, random, date_added, views, favorites)
-SORTING=random
+SORTING=date_added
 # How should the Wallpapers be ordered (desc, asc)
 ORDER=desc
 # Searchterm
@@ -100,6 +100,8 @@ function getPage {
 
     # parameters ok --> get page
     wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=alpha.wallhaven.cc -O tmp "http://alpha.wallhaven.cc/$1"
+    # echo "http://alpha.wallhaven.cc/$1"
+    # cat tmp
 } # /getPage
 
 #
@@ -107,34 +109,48 @@ function getPage {
 # arg1: the file containing the wallpapers
 #
 function downloadWallpapers {
-	URLSFORIMAGES="$(cat tmp | grep -o '<a href="http://alpha.wallhaven.cc/wallpaper/[0-9]*"' | sed  's .\{25\}  ')"
-	for imgURL in $URLSFORIMAGES
+	URLSFORIMAGES="$(cat tmp | grep -o '<a class="preview" href="http://alpha.wallhaven.cc/wallpaper/[0-9]*"' | sed  's .\{25\}  ')"
+        readarray -t sorted < <(for a in "${URLSFORIMAGES[@]}"; do echo "$a"; done | sort -r)
+	for imgURL in $sorted
         do
         img="$(echo $imgURL | sed 's/.\{1\}$//')"
-        number="$(echo $img | sed  's .\{36\}  ')"
-        if cat downloaded.txt | grep -w "$number" >/dev/null
+	number="$(echo $img | sed  's .\{36\}  ')"
+#	echo "number: $number"
+        img="$(echo http://alpha.wallhaven.cc/wallpapers/full/wallhaven-$number.jpg)"
+#	echo "img: $img"
+	if cat downloaded.txt | grep -w "$number" >/dev/null
 			then
 				printf "File already downloaded!\n"
+				if [ $TYPE == refresh ]; then
+				  rm -f cookies.txt login login.1 tmp
+				  printf "    - done!\n"
+				  exit 0
+                                fi
 			else
 				echo $number >> downloaded.txt
 				wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=alpha.wallhaven.cc $img
-				cat $number | egrep -o "http://alpha.wallhaven.cc/wallpapers.*(png|jpg|gif)" | wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=http://alpha.wallhaven.cc/wallpaper/$number -i -
-				rm $number	
+				#cat $number | egrep -o "http://alpha.wallhaven.cc/wallpapers.*(png|jpg|gif)" | wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=http://alpha.wallhaven.cc/wallpapers/$number -i -
+				#rm $number
         fi
         done
         rm tmp
 } #/downloadWallpapers
 
 # login only when it is required ( for example to download favourites or nsfw content... )
-if [ $PURITY == 001 ] || [ $PURITY == 011 ] || [ $PURITY == 111 ] ; then
-   login $USER $PASS
+#if [ $PURITY == 001 ] || [ $PURITY == 011 ] || [ $PURITY == 111 ] ; then
+#   login $USER $PASS
+#fi
+
+if [ $TYPE == refresh ]; then
+  SORTING=date_added
+  ORDER=desc
 fi
 
-if [ $TYPE == standard ]; then
-    for (( count= 0, page=1; count< "$WPNUMBER"; count=count+64, page=page+1 ));
+if [ $TYPE == standard ] || [ $TYPE == refresh ]; then
+    for (( count= 0, page=1; count< "$WPNUMBER"; count=count+24, page=page+1 ));
     do
         printf "Download Page $page"
-        getPage "wallpaper/search?page=$page&categories=$CATEGORIES&purity=$PURITY&resolutions=$RESOLUTION&ratios=$RATIO&sorting=$SORTING&order=$ORDER"
+        getPage "search?page=$page&categories=$CATEGORIES&purity=$PURITY&resolutions=$RESOLUTION&ratios=$RATIO&sorting=$SORTING&order=$ORDER"
         printf "                    - done!\n"
         printf "Download Wallpapers from Page $page"
         downloadWallpapers
@@ -143,7 +159,7 @@ if [ $TYPE == standard ]; then
 
 elif [ $TYPE == search ] ; then
     # SEARCH
-    for (( count= 0, page=1; count< "$WPNUMBER"; count=count+"64", page=page+1 ));
+    for (( count= 0, page=1; count< "$WPNUMBER"; count=count+24, page=page+1 ));
     do
         printf "Download Page $page"
         getPage "wallpaper/search?page=$page&categories=$CATEGORIES&purity=$PURITY&resolutions=$RESOLUTION&ratios=$RATIO&sorting=relevance&order=desc&q=$QUERY"
@@ -157,7 +173,7 @@ elif [ $TYPE == favorites ] ; then
     # FAVORITES
     # currently using sum of all collections
     favnumber="$(wget -q --keep-session-cookies --load-cookies=cookies.txt --referer=alpha.wallhaven.cc http://alpha.wallhaven.cc/favorites -O - | grep -A 1 "<span>Favorites</span>" | grep -B 1 "<small>" | sed -n '2{p;q}' | sed 's/.\{9\}$//' | sed 's .\{23\}  ')"
-    for (( count= 0, page=1; count< "$WPNUMBER" && count< "$favnumber"; count=count+"64", page=page+1 ));
+    for (( count= 0, page=1; count< "$WPNUMBER" && count< "$favnumber"; count=count+24, page=page+1 ));
     do
         printf "Download Page $page"
         getPage "favorites?page=$page"
@@ -169,7 +185,7 @@ elif [ $TYPE == favorites ] ; then
 
 elif [ $TYPE == useruploads ] ; then
     # UPLOADS FROM SPECIFIC USER
-    for (( count= 0, page=1; count< "$WPNUMBER"; count=count+"64", page=page+1 ));
+    for (( count= 0, page=1; count< "$WPNUMBER"; count=count+24, page=page+1 ));
     do
         printf "Download Page $page"
         getPage "user/$USR/uploads?page=$page"
